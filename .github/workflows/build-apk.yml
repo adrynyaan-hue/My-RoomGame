@@ -29,7 +29,10 @@ jobs:
 
       - name: Extract MyRoom project
         run: unzip -o MyRoomGame_ready_for_GitHub.zip -d project
-
+     
+      - name: Enable AndroidX
+        run: echo "android.useAndroidX=true" > project/gradle.properties
+      
       - name: Build APK
         working-directory: project
         run: gradle --no-daemon :app:assembleDebug
