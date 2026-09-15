@@ -32,11 +32,27 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
+      -       - name: Check repository files
+        run: |
+          echo "=== FILE DI ROOT REPOSITORY ==="
+          ls -lah
+          echo "=== CARI SEMUA ZIP ==="
+          find . -maxdepth 2 -type f -iname "*.zip" -print
+
       - name: Extract MyRoom project
         run: |
           rm -rf project
           mkdir -p project
-          unzip -o MyRoomGame_ready_for_Github.zip -d project
+
+          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: ZIP project tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "ZIP ditemukan: $ZIP_FILE"
+          unzip -o "$ZIP_FILE" -d project
 
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
