@@ -3,7 +3,8 @@ name: Build MyRoom APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
@@ -20,22 +21,22 @@ jobs:
           java-version: '17'
 
       - name: Install Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
 
       - name: Install Android SDK packages
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: '8.7'
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Extract MyRoom project
         run: |
           rm -rf project
-          mkdir project
-          unzip -o MyRoomGame_ready_for_GitHub.zip -d project
+          mkdir -p project
+          unzip -o MyRoomGame_ready_for_Github.zip -d project
 
       - name: Configure AndroidX
         working-directory: project
@@ -43,9 +44,15 @@ jobs:
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
+      - name: Grant Gradle permission
+        working-directory: project
+        run: |
+          chmod +x gradlew
+
       - name: Build APK
         working-directory: project
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
+        run: |
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
