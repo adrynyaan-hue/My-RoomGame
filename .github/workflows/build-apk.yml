@@ -30,13 +30,14 @@ jobs:
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tool
-            - name: Extract MyRoom project
-  run: |
-    rm -rf project
-    mkdir -p project
-    ls -lah
-    unzip -o MyRoomGame_ready_for_Github.zip -d project
+            "build-tools;35.0.0"
+
+      - name: Extract MyRoom project
+        run: |
+          rm -rf project
+          mkdir -p project
+          ls -lah
+          unzip -o MyRoomGame_ready_for_Github.zip -d project
 
       - name: Configure AndroidX
         working-directory: project
