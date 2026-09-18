@@ -36,103 +36,31 @@ jobs:
           mkdir -p project
           unzip -o MyRoomGame_ready_for_GitHub.zip -d project
 
-      - name: Configure AndroidX
+      - name: Configure project
         working-directory: project
         run: |
-          touch gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
-      - name: Fix Java and Kotlin JVM 17
-        working-directory: project
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          sed -i '/android {/a\
+              compileOptions {\
+                  sourceCompatibility JavaVersion.VERSION_17\
+                  targetCompatibility JavaVersion.VERSION_17\
+              }' app/build.gradle
 
-          p = Path("app/build.gradle")
+          cat >> app/build.gradle <<'EOF'
 
-          if not p.exists():
-              raise SystemExit("ERROR: app/build.gradle tidak ditemukan")
-
-          text = p.read_text()
-
-          # Hapus konfigurasi lama jika ada
-          text = text.replace(
-              "JavaVersion.VERSION_1_8",
-              "JavaVersion.VERSION_17"
-          )
-
-          text = text.replace(
-              "JavaVersion.VERSION_8",
-              "JavaVersion.VERSION_17"
-          )
-
-          text = text.replace(
-              'jvmTarget = "1.8"',
-              'jvmTarget = "17"'
-          )
-
-          text = text.replace(
-              "jvmTarget = '1.8'",
-              'jvmTarget = "17"'
-          )
-
-          # Tambahkan compileOptions Java 17
-          if "compileOptions" not in text:
-              marker = "android {"
-
-              if marker not in text:
-                  raise SystemExit("ERROR: blok android {} tidak ditemukan")
-
-              replacement = """android {
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }"""
-
-              text = text.replace(marker, replacement, 1)
-
-          # Pastikan Kotlin target 17
-          if "kotlinOptions" not in text:
-              text += """
-
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-}
-"""
-
-          p.write_text(text)
-
-          print("================================")
-          print("FINAL app/build.gradle")
-          print("================================")
-          print(text)
-          PY
-
-      - name: Check JVM configuration
-        working-directory: project
-        run: |
-          echo "=== JAVA VERSION ==="
-          java -version
-
-          echo "=== GRADLE VERSION ==="
-          gradle --version
-
-          echo "=== APP BUILD.GRADLE ==="
-          cat app/build.gradle
+          tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          EOF
 
       - name: Build APK
         working-directory: project
         run: |
           gradle --no-daemon --stacktrace :app:assembleDebug
-
-      - name: Check APK
-        working-directory: project
-        run: |
-          echo "=== APK OUTPUT ==="
-          find app/build/outputs -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
