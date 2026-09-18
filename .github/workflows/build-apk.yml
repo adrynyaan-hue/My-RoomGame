@@ -54,7 +54,6 @@ jobs:
 
           text = p.read_text()
 
-          # Java 8 -> Java 17
           text = text.replace(
               "JavaVersion.VERSION_1_8",
               "JavaVersion.VERSION_17"
@@ -65,7 +64,6 @@ jobs:
               "JavaVersion.VERSION_17"
           )
 
-          # Kotlin 1.8/8 -> Kotlin 17
           text = text.replace(
               'jvmTarget = "1.8"',
               'jvmTarget = "17"'
@@ -76,86 +74,35 @@ jobs:
               'jvmTarget = "17"'
           )
 
-          text = text.replace(
-              'jvmTarget = "8"',
-              'jvmTarget = "17"'
-          )
-
-          text = text.replace(
-              "jvmTarget = '8'",
-              'jvmTarget = "17'"
-          )
-
           p.write_text(text)
           PY
-
-      - name: Create JVM 17 Gradle configuration
-        working-directory: project
-        run: |
-          cat > force-jvm17.gradle <<'EOF'
-          import org.gradle.api.tasks.compile.JavaCompile
-
-          // Force every Java compiler task to JVM 17
-          tasks.withType(JavaCompile).configureEach {
-              sourceCompatibility = "17"
-              targetCompatibility = "17"
-          }
-
-          // Force Kotlin compiler tasks to JVM 17
-          tasks.configureEach { task ->
-              if (task.name.toLowerCase().contains("kotlin")) {
-                  try {
-                      task.kotlinOptions.jvmTarget = "17"
-                  } catch (Exception ignored) {
-                  }
-              }
-          }
-          EOF
 
       - name: Check project
         working-directory: project
         run: |
-          echo "=============================="
-          echo "JAVA VERSION"
-          echo "=============================="
+          echo "=== Java ==="
           java -version
 
-          echo "=============================="
-          echo "GRADLE VERSION"
-          echo "=============================="
+          echo "=== Gradle ==="
           gradle --version
 
-          echo "=============================="
-          echo "PROJECT FILES"
-          echo "=============================="
+          echo "=== Project ==="
           ls -la
 
-          echo "=============================="
-          echo "APP FILES"
-          echo "=============================="
+          echo "=== App ==="
           ls -la app
 
-          echo "=============================="
-          echo "APP BUILD.GRADLE"
-          echo "=============================="
+          echo "=== build.gradle ==="
           cat app/build.gradle
 
       - name: Build APK
         working-directory: project
         run: |
-          gradle \
-            --no-daemon \
-            --stacktrace \
-            -I force-jvm17.gradle \
-            :app:assembleDebug
+          gradle --no-daemon --stacktrace :app:assembleDebug
 
       - name: Check APK
         working-directory: project
         run: |
-          echo "=============================="
-          echo "GENERATED APK"
-          echo "=============================="
-
           find app/build/outputs -type f -name "*.apk" -print
 
       - name: Upload APK
