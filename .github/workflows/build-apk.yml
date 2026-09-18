@@ -36,19 +36,25 @@ jobs:
           mkdir -p project
           unzip -o MyRoomGame_ready_for_GitHub.zip -d project
 
-      - name: Fix JVM target
+      - name: Configure AndroidX and JVM 17
         working-directory: project
         run: |
+          touch gradle.properties
+
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+
           python3 - <<'PY'
           from pathlib import Path
 
           p = Path("app/build.gradle")
 
           if not p.exists():
-              raise SystemExit("app/build.gradle tidak ditemukan")
+              raise SystemExit("ERROR: app/build.gradle tidak ditemukan")
 
           text = p.read_text()
 
+          # Java 8 -> Java 17
           text = text.replace(
               "JavaVersion.VERSION_1_8",
               "JavaVersion.VERSION_17"
@@ -59,6 +65,7 @@ jobs:
               "JavaVersion.VERSION_17"
           )
 
+          # Kotlin 1.8/8 -> Kotlin 17
           text = text.replace(
               'jvmTarget = "1.8"',
               'jvmTarget = "17"'
@@ -69,42 +76,86 @@ jobs:
               'jvmTarget = "17"'
           )
 
+          text = text.replace(
+              'jvmTarget = "8"',
+              'jvmTarget = "17"'
+          )
+
+          text = text.replace(
+              "jvmTarget = '8'",
+              'jvmTarget = "17'"
+          )
+
           p.write_text(text)
           PY
 
-      - name: Configure AndroidX
+      - name: Create JVM 17 Gradle configuration
         working-directory: project
         run: |
-          touch gradle.properties
-          echo "android.useAndroidX=true" >> gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
+          cat > force-jvm17.gradle <<'EOF'
+          import org.gradle.api.tasks.compile.JavaCompile
+
+          // Force every Java compiler task to JVM 17
+          tasks.withType(JavaCompile).configureEach {
+              sourceCompatibility = "17"
+              targetCompatibility = "17"
+          }
+
+          // Force Kotlin compiler tasks to JVM 17
+          tasks.configureEach { task ->
+              if (task.name.toLowerCase().contains("kotlin")) {
+                  try {
+                      task.kotlinOptions.jvmTarget = "17"
+                  } catch (Exception ignored) {
+                  }
+              }
+          }
+          EOF
 
       - name: Check project
         working-directory: project
         run: |
-          echo "=== Java ==="
+          echo "=============================="
+          echo "JAVA VERSION"
+          echo "=============================="
           java -version
 
-          echo "=== Gradle ==="
+          echo "=============================="
+          echo "GRADLE VERSION"
+          echo "=============================="
           gradle --version
 
-          echo "=== Project ==="
+          echo "=============================="
+          echo "PROJECT FILES"
+          echo "=============================="
           ls -la
 
-          echo "=== App ==="
+          echo "=============================="
+          echo "APP FILES"
+          echo "=============================="
           ls -la app
 
-          echo "=== build.gradle ==="
+          echo "=============================="
+          echo "APP BUILD.GRADLE"
+          echo "=============================="
           cat app/build.gradle
 
       - name: Build APK
         working-directory: project
         run: |
-          gradle --no-daemon --stacktrace :app:assembleDebug
+          gradle \
+            --no-daemon \
+            --stacktrace \
+            -I force-jvm17.gradle \
+            :app:assembleDebug
 
       - name: Check APK
         working-directory: project
         run: |
+          echo "=============================="
+          echo "GENERATED APK"
+          echo "=============================="
+
           find app/build/outputs -type f -name "*.apk" -print
 
       - name: Upload APK
