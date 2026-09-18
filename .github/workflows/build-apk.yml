@@ -35,20 +35,51 @@ jobs:
           mkdir project
           unzip -o MyRoomGame_ready_for_GitHub.zip -d project
 
-      - name: Configure AndroidX
+      - name: Configure AndroidX and JVM 17
         working-directory: project
         run: |
           touch gradle.properties
+
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/build.gradle")
+          text = p.read_text()
+
+          # Fix Java 1.8 -> Java 17
+          text = text.replace(
+              "JavaVersion.VERSION_1_8",
+              "JavaVersion.VERSION_17"
+          )
+
+          # Fix Kotlin JVM target 1.8 -> 17
+          text = text.replace(
+              'jvmTarget = "1.8"',
+              'jvmTarget = "17"'
+          )
+
+          text = text.replace(
+              "jvmTarget = '1.8'",
+              'jvmTarget = "17"'
+          )
+
+          p.write_text(text)
+          PY
 
       - name: Check project
         working-directory: project
         run: |
           echo "=== Project files ==="
           ls -la
+
           echo "=== App files ==="
           ls -la app
+
+          echo "=== Final app/build.gradle ==="
+          cat app/build.gradle
 
       - name: Build APK
         working-directory: project
