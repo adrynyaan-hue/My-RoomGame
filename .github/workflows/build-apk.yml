@@ -32,7 +32,7 @@ jobs:
       - name: Extract MyRoom project
         run: |
           rm -rf project
-          mkdir project
+          mkdir -p project
           unzip -o MyRoomGame_ready_for_GitHub.zip -d project
 
       - name: Configure AndroidX and JVM 17
@@ -45,33 +45,148 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           p = Path("app/build.gradle")
+
+          if not p.exists():
+              raise SystemExit("ERROR: app/build.gradle tidak ditemukan")
+
           text = p.read_text()
 
-          # Fix Java 1.8 -> Java 17
+          # ==========================================
+          # FORCE JAVA TARGET 17
+          # ==========================================
+
           text = text.replace(
               "JavaVersion.VERSION_1_8",
               "JavaVersion.VERSION_17"
           )
 
-          # Fix Kotlin JVM target 1.8 -> 17
           text = text.replace(
-              'jvmTarget = "1.8"',
-              'jvmTarget = "17"'
+              "JavaVersion.VERSION_8",
+              "JavaVersion.VERSION_17"
           )
 
-          text = text.replace(
-              "jvmTarget = '1.8'",
-              'jvmTarget = "17"'
+          text = re.sub(
+              r'(sourceCompatibility\s*[=:]\s*)["\']?1\.8["\']?',
+              r'\g<1>JavaVersion.VERSION_17',
+              text
           )
+
+          text = re.sub(
+              r'(targetCompatibility\s*[=:]\s*)["\']?1\.8["\']?',
+              r'\g<1>JavaVersion.VERSION_17',
+              text
+          )
+
+          # ==========================================
+          # FORCE KOTLIN JVM TARGET 17
+          # ==========================================
+
+          text = re.sub(
+              r'jvmTarget\s*=\s*["\']1\.8["\']',
+              'jvmTarget = "17"',
+              text
+          )
+
+          text = re.sub(
+              r'jvmTarget\s*=\s*["\']8["\']',
+              'jvmTarget = "17"',
+              text
+          )
+
+          # ==========================================
+          # ADD/OVERRIDE ANDROID COMPILE OPTIONS
+          # ==========================================
+
+          if "compileOptions" not in text:
+              text += '''
+
+android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+'''
+          else:
+              text = re.sub(
+                  r'sourceCompatibility\s+JavaVersion\.VERSION_\d+',
+                  'sourceCompatibility JavaVersion.VERSION_17',
+                  text
+              )
+
+              text = re.sub(
+                  r'targetCompatibility\s+JavaVersion\.VERSION_\d+',
+                  'targetCompatibility JavaVersion.VERSION_17',
+                  text
+              )
+
+          # ==========================================
+          # ADD/OVERRIDE KOTLIN JVM TARGET
+          # ==========================================
+
+          if "kotlinOptions" not in text:
+              text += '''
+
+android {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+'''
+          else:
+              text = re.sub(
+                  r'jvmTarget\s*=\s*["\'](?:1\.8|8|\d+)["\']',
+                  'jvmTarget = "17"',
+                  text
+              )
 
           p.write_text(text)
+
+          print("====================================")
+          print("JVM 17 configuration applied")
+          print("====================================")
+          print(text)
           PY
+
+      - name: Force Java and Kotlin tasks to JVM 17
+        working-directory: project
+        run: |
+          cat > force-jvm17.gradle <<'EOF'
+          import org.gradle.api.tasks.compile.JavaCompile
+
+          tasks.withType(JavaCompile).configureEach {
+              sourceCompatibility = "17"
+              targetCompatibility = "17"
+          }
+
+          tasks.matching {
+              it.name.toLowerCase().contains("kotlin")
+          }.configureEach {
+              try {
+                  compilerOptions.jvmTarget.set(
+                      org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+                  )
+              } catch (Exception ignored) {
+                  try {
+                      kotlinOptions.jvmTarget = "17"
+                  } catch (Exception ignored2) {
+                  }
+              }
+          }
+          EOF
 
       - name: Check project
         working-directory: project
         run: |
+          echo "=== Java version ==="
+          java -version
+
+          echo "=== Gradle version ==="
+          gradle --version
+
           echo "=== Project files ==="
           ls -la
 
@@ -84,7 +199,17 @@ jobs:
       - name: Build APK
         working-directory: project
         run: |
-          gradle --no-daemon --stacktrace :app:assembleDebug
+          gradle \
+            --no-daemon \
+            --stacktrace \
+            -I force-jvm17.gradle \
+            :app:assembleDebug
+
+      - name: Find APK
+        working-directory: project
+        run: |
+          echo "=== APK files ==="
+          find app/build/outputs -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
