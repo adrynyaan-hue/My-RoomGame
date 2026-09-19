@@ -3,8 +3,7 @@ name: Build MyRoom APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build:
@@ -33,29 +32,52 @@ jobs:
       - name: Extract MyRoom project
         run: |
           rm -rf project
-          mkdir -p project
-          unzip -o MyRoomGame_ready_for_GitHub.zip -d project
+          mkdir project
+          unzip -o MyRoomGame_welcome_redesign.zip -d project
 
-      - name: Configure project
+      - name: Configure AndroidX and JVM 17
         working-directory: project
         run: |
+          touch gradle.properties
+
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
-          sed -i '/android {/a\
-              compileOptions {\
-                  sourceCompatibility JavaVersion.VERSION_17\
-                  targetCompatibility JavaVersion.VERSION_17\
-              }' app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
 
-          cat >> app/build.gradle <<'EOF'
+          p = Path("app/build.gradle")
+          text = p.read_text()
 
-          tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-          }
-          EOF
+          text = text.replace(
+              "JavaVersion.VERSION_1_8",
+              "JavaVersion.VERSION_17"
+          )
+
+          text = text.replace(
+              'jvmTarget = "1.8"',
+              'jvmTarget = "17"'
+          )
+
+          text = text.replace(
+              "jvmTarget = '1.8'",
+              'jvmTarget = "17"'
+          )
+
+          p.write_text(text)
+          PY
+
+      - name: Check project
+        working-directory: project
+        run: |
+          echo "=== Project files ==="
+          ls -la
+
+          echo "=== App files ==="
+          ls -la app
+
+          echo "=== Final app/build.gradle ==="
+          cat app/build.gradle
 
       - name: Build APK
         working-directory: project
