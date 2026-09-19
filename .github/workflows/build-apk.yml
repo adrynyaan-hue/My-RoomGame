@@ -43,36 +43,99 @@ jobs:
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
-      - name: Force Java and Kotlin JVM 17
+      - name: Force Java and Kotlin to JVM 17
         working-directory: project
         run: |
-          cat >> app/build.gradle <<'EOF'
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
 
-          // Force Java compilation to JVM 17
-          tasks.withType(JavaCompile).configureEach {
-              sourceCompatibility = "17"
-              targetCompatibility = "17"
-          }
+          p = Path("app/build.gradle")
 
-          // Force Kotlin compilation to JVM 17
-          tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-          }
-          EOF
+          if not p.exists():
+              raise SystemExit("ERROR: app/build.gradle tidak ditemukan")
 
-      - name: Check project
+          text = p.read_text()
+
+          # Semua referensi Java 8 -> Java 17
+          text = text.replace(
+              "JavaVersion.VERSION_1_8",
+              "JavaVersion.VERSION_17"
+          )
+
+          text = text.replace(
+              "JavaVersion.VERSION_8",
+              "JavaVersion.VERSION_17"
+          )
+
+          # Semua Kotlin JVM target 1.8 -> 17
+          text = text.replace(
+              'jvmTarget = "1.8"',
+              'jvmTarget = "17"'
+          )
+
+          text = text.replace(
+              "jvmTarget = '1.8'",
+              'jvmTarget = "17"'
+          )
+
+          # Kalau ada angka 1.8 pada source/target compatibility
+          text = text.replace(
+              'sourceCompatibility = "1.8"',
+              'sourceCompatibility = "17"'
+          )
+
+          text = text.replace(
+              'targetCompatibility = "1.8"',
+              'targetCompatibility = "17"'
+          )
+
+          # Tambahkan konfigurasi Android Java 17 jika belum ada
+          if "compileOptions" not in text:
+              text = text.replace(
+                  "android {",
+                  """android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+""",
+                  1
+              )
+
+          # Paksa task JavaCompile langsung
+          text += """
+
+tasks.withType(JavaCompile).configureEach {
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
+    options.release.set(17)
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+"""
+
+          p.write_text(text)
+
+          print("=== FINAL BUILD.GRADLE ===")
+          print(text)
+          PY
+
+      - name: Verify JVM configuration
         working-directory: project
         run: |
-          echo "=== PROJECT ==="
-          ls -la
+          echo "=== JAVA ==="
+          java -version
 
-          echo "=== APP ==="
-          ls -la app
+          echo "=== GRADLE ==="
+          gradle --version
 
-          echo "=== BUILD.GRADLE ==="
-          cat app/build.gradle
+          echo "=== SEARCH JVM SETTINGS ==="
+          grep -nE "VERSION_1_8|VERSION_8|1.8|VERSION_17|jvmTarget|sourceCompatibility|targetCompatibility|options.release" app/build.gradle || true
 
       - name: Build APK
         working-directory: project
