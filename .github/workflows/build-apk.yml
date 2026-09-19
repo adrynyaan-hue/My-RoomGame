@@ -42,111 +42,28 @@ jobs:
           touch gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          echo "kotlin.jvm.target.validation.mode=warning" >> gradle.properties
 
-      - name: Force Java and Kotlin to JVM 17
+      - name: Fix JVM target
         working-directory: project
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
+          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' app/build.gradle
+          sed -i 's/JavaVersion.VERSION_8/JavaVersion.VERSION_17/g' app/build.gradle
+          sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' app/build.gradle
+          sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" app/build.gradle
 
-          p = Path("app/build.gradle")
-
-          if not p.exists():
-              raise SystemExit("ERROR: app/build.gradle tidak ditemukan")
-
-          text = p.read_text()
-
-          # Semua referensi Java 8 -> Java 17
-          text = text.replace(
-              "JavaVersion.VERSION_1_8",
-              "JavaVersion.VERSION_17"
-          )
-
-          text = text.replace(
-              "JavaVersion.VERSION_8",
-              "JavaVersion.VERSION_17"
-          )
-
-          # Semua Kotlin JVM target 1.8 -> 17
-          text = text.replace(
-              'jvmTarget = "1.8"',
-              'jvmTarget = "17"'
-          )
-
-          text = text.replace(
-              "jvmTarget = '1.8'",
-              'jvmTarget = "17"'
-          )
-
-          # Kalau ada angka 1.8 pada source/target compatibility
-          text = text.replace(
-              'sourceCompatibility = "1.8"',
-              'sourceCompatibility = "17"'
-          )
-
-          text = text.replace(
-              'targetCompatibility = "1.8"',
-              'targetCompatibility = "17"'
-          )
-
-          # Tambahkan konfigurasi Android Java 17 jika belum ada
-          if "compileOptions" not in text:
-              text = text.replace(
-                  "android {",
-                  """android {
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-""",
-                  1
-              )
-
-          # Paksa task JavaCompile langsung
-          text += """
-
-tasks.withType(JavaCompile).configureEach {
-    sourceCompatibility = "17"
-    targetCompatibility = "17"
-    options.release.set(17)
-}
-
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-}
-"""
-
-          p.write_text(text)
-
-          print("=== FINAL BUILD.GRADLE ===")
-          print(text)
-          PY
-
-      - name: Verify JVM configuration
+      - name: Show configuration
         working-directory: project
         run: |
-          echo "=== JAVA ==="
-          java -version
-
-          echo "=== GRADLE ==="
-          gradle --version
-
-          echo "=== SEARCH JVM SETTINGS ==="
-          grep -nE "VERSION_1_8|VERSION_8|1.8|VERSION_17|jvmTarget|sourceCompatibility|targetCompatibility|options.release" app/build.gradle || true
+          echo "=== BUILD.GRADLE ==="
+          cat app/build.gradle
+          echo "=== GRADLE.PROPERTIES ==="
+          cat gradle.properties
 
       - name: Build APK
         working-directory: project
         run: |
           gradle --no-daemon --stacktrace :app:assembleDebug
-
-      - name: Check APK
-        working-directory: project
-        run: |
-          echo "=== APK OUTPUT ==="
-          find app/build/outputs -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
