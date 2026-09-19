@@ -3,7 +3,8 @@ name: Build MyRoom APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
@@ -32,57 +33,57 @@ jobs:
       - name: Extract MyRoom project
         run: |
           rm -rf project
-          mkdir project
+          mkdir -p project
           unzip -o MyRoomGame_welcome_redesign.zip -d project
 
-      - name: Configure AndroidX and JVM 17
+      - name: Configure AndroidX
         working-directory: project
         run: |
           touch gradle.properties
-
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
-          python3 - <<'PY'
-          from pathlib import Path
+      - name: Force Java and Kotlin JVM 17
+        working-directory: project
+        run: |
+          cat >> app/build.gradle <<'EOF'
 
-          p = Path("app/build.gradle")
-          text = p.read_text()
+          // Force Java compilation to JVM 17
+          tasks.withType(JavaCompile).configureEach {
+              sourceCompatibility = "17"
+              targetCompatibility = "17"
+          }
 
-          text = text.replace(
-              "JavaVersion.VERSION_1_8",
-              "JavaVersion.VERSION_17"
-          )
-
-          text = text.replace(
-              'jvmTarget = "1.8"',
-              'jvmTarget = "17"'
-          )
-
-          text = text.replace(
-              "jvmTarget = '1.8'",
-              'jvmTarget = "17"'
-          )
-
-          p.write_text(text)
-          PY
+          // Force Kotlin compilation to JVM 17
+          tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          EOF
 
       - name: Check project
         working-directory: project
         run: |
-          echo "=== Project files ==="
+          echo "=== PROJECT ==="
           ls -la
 
-          echo "=== App files ==="
+          echo "=== APP ==="
           ls -la app
 
-          echo "=== Final app/build.gradle ==="
+          echo "=== BUILD.GRADLE ==="
           cat app/build.gradle
 
       - name: Build APK
         working-directory: project
         run: |
           gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Check APK
+        working-directory: project
+        run: |
+          echo "=== APK OUTPUT ==="
+          find app/build/outputs -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
